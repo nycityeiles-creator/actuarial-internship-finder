@@ -20,15 +20,53 @@ MAX_JOBS_IN_ISSUE = 25
 
 
 # ============================================================
-# WHAT WE SEARCH FOR
+# COMPANIES WE ESPECIALLY WANT TO SEARCH
+# ============================================================
+
+TARGET_COMPANIES = [
+    "Aon",
+    "WTW",
+    "Willis Towers Watson",
+    "Mercer",
+    "Milliman",
+    "Chubb",
+    "MetLife",
+    "New York Life",
+    "Guardian Life",
+    "Travelers",
+    "Zurich",
+    "Swiss Re",
+    "Munich Re",
+    "Guy Carpenter",
+    "Marsh McLennan",
+    "Gallagher",
+    "Lockton",
+    "Liberty Mutual",
+    "Nationwide",
+    "Prudential",
+    "MassMutual",
+    "Cigna",
+    "Aetna",
+    "CVS Health",
+    "UnitedHealth Group",
+    "Optum",
+    "Humana",
+    "Elevance Health",
+    "Segal",
+    "Deloitte",
+    "PwC",
+    "EY",
+    "KPMG",
+]
+
+
+# ============================================================
+# GENERAL WEB SEARCHES
 # ============================================================
 
 SEARCH_QUERIES = [
 
-    # -------------------------
-    # NEW YORK CITY
-    # -------------------------
-
+    # NYC
     '"actuarial intern" "2027" "New York, NY"',
     '"actuarial internship" "2027" "New York, NY"',
     '"summer 2027" "actuarial intern" "New York City"',
@@ -39,10 +77,7 @@ SEARCH_QUERIES = [
     '"actuarial intern" "New York, NY" site:lever.co',
     '"actuarial intern" "New York, NY" site:jobs.smartrecruiters.com',
 
-    # -------------------------
-    # REMOTE
-    # -------------------------
-
+    # Remote
     '"actuarial intern" "2027" remote',
     '"actuarial internship" "2027" remote',
     '"summer 2027" actuarial remote internship',
@@ -92,7 +127,7 @@ NOT_REMOTE_TERMS = (
 
 
 # ============================================================
-# CAREER WEBSITE PRIORITY
+# JOB SITE INFORMATION
 # ============================================================
 
 DIRECT_JOB_DOMAINS = (
@@ -128,10 +163,11 @@ BAD_TITLE_PHRASES = (
 
 
 CSV_FIELDS = [
+    "company",
+    "title",
+    "location_type",
     "first_seen_utc",
     "priority_score",
-    "location_type",
-    "title",
     "source_domain",
     "url",
     "search_query",
@@ -179,9 +215,7 @@ def canonicalize_url(url):
 
     try:
 
-        parts = urlsplit(
-            url.strip()
-        )
+        parts = urlsplit(url.strip())
 
         kept_query = []
 
@@ -221,7 +255,6 @@ def canonicalize_url(url):
         )
 
     except Exception:
-
         return url.strip()
 
 
@@ -241,33 +274,223 @@ def domain_from_url(url):
         )
 
     except Exception:
-
         return ""
 
 
 # ============================================================
-# CHECK LOCATION
+# COMPANY NAME CLEANING
 # ============================================================
 
-def get_location_type(title, snippet):
+def normalize_company_name(company):
+
+    if not company:
+        return None
+
+    company = clean_text(company)
+
+    company = re.sub(
+        r"\s+[|-]\s+Careers?$",
+        "",
+        company,
+        flags=re.IGNORECASE
+    )
+
+    company = re.sub(
+        r"\s+[|-]\s+Jobs?$",
+        "",
+        company,
+        flags=re.IGNORECASE
+    )
+
+    company = company.strip(
+        " -|:"
+    )
+
+    if len(company) < 2:
+        return None
+
+    return company
+
+
+# ============================================================
+# IDENTIFY COMPANY
+# ============================================================
+
+def identify_company(
+    title,
+    snippet,
+    url,
+    known_company=None
+):
+
+    # --------------------------------------------------------
+    # BEST CASE:
+    # We searched for a specific company ourselves.
+    # --------------------------------------------------------
+
+    if known_company:
+        return normalize_company_name(
+            known_company
+        )
 
     combined = (
         f"{title} {snippet}"
         .lower()
     )
 
-    # -------------------------
-    # NYC
-    # -------------------------
+    # --------------------------------------------------------
+    # CHECK OUR KNOWN ACTUARIAL EMPLOYERS
+    # --------------------------------------------------------
+
+    for company in TARGET_COMPANIES:
+
+        if company.lower() in combined:
+
+            return normalize_company_name(
+                company
+            )
+
+    # --------------------------------------------------------
+    # TRY TO EXTRACT COMPANY FROM TITLE
+    #
+    # Examples:
+    #
+    # Actuarial Intern - Chubb
+    # Actuarial Internship | New York Life
+    # Actuarial Intern at MetLife
+    # --------------------------------------------------------
+
+    separators = [
+        " at ",
+        " - ",
+        " | ",
+        " – ",
+        " — ",
+    ]
+
+    for separator in separators:
+
+        if separator.lower() not in title.lower():
+            continue
+
+        parts = re.split(
+            re.escape(separator),
+            title,
+            flags=re.IGNORECASE
+        )
+
+        if len(parts) < 2:
+            continue
+
+        # Usually company appears at the end.
+        possible_company = (
+            parts[-1]
+            .strip()
+        )
+
+        possible_company_lower = (
+            possible_company.lower()
+        )
+
+        # Avoid confusing location with company.
+        location_words = (
+            "new york",
+            "remote",
+            "nyc",
+            "manhattan",
+            "brooklyn",
+            "queens",
+            "bronx",
+            "intern",
+            "internship",
+        )
+
+        if any(
+            word in possible_company_lower
+            for word in location_words
+        ):
+            continue
+
+        company = normalize_company_name(
+            possible_company
+        )
+
+        if company:
+            return company
+
+    # --------------------------------------------------------
+    # TRY DOMAIN NAME
+    #
+    # Example:
+    # careers.metlife.com
+    # jobs.chubb.com
+    # --------------------------------------------------------
+
+    domain = domain_from_url(url)
+
+    generic_domains = (
+        "linkedin.com",
+        "indeed.com",
+        "glassdoor.com",
+        "ziprecruiter.com",
+        "myworkdayjobs.com",
+        "greenhouse.io",
+        "lever.co",
+        "smartrecruiters.com",
+        "icims.com",
+        "taleo.net",
+    )
+
+    if not any(
+        generic in domain
+        for generic in generic_domains
+    ):
+
+        parts = domain.split(".")
+
+        if len(parts) >= 2:
+
+            candidate = parts[-2]
+
+            candidate = (
+                candidate
+                .replace("-", " ")
+                .replace("_", " ")
+                .title()
+            )
+
+            if candidate not in (
+                "Careers",
+                "Jobs",
+                "Career",
+            ):
+
+                return normalize_company_name(
+                    candidate
+                )
+
+    # If we cannot confidently identify a company:
+    return None
+
+
+# ============================================================
+# LOCATION
+# ============================================================
+
+def get_location_type(
+    title,
+    snippet
+):
+
+    combined = (
+        f"{title} {snippet}"
+        .lower()
+    )
 
     is_nyc = any(
         term in combined
         for term in NYC_TERMS
     )
-
-    # -------------------------
-    # REMOTE
-    # -------------------------
 
     says_not_remote = any(
         term in combined
@@ -295,10 +518,13 @@ def get_location_type(title, snippet):
 
 
 # ============================================================
-# CHECK WHETHER RESULT IS AN ACTUARIAL INTERNSHIP
+# CHECK WHETHER RESULT IS VALID
 # ============================================================
 
-def is_relevant(title, snippet):
+def is_relevant(
+    title,
+    snippet
+):
 
     title_lower = title.lower()
 
@@ -307,19 +533,16 @@ def is_relevant(title, snippet):
         .lower()
     )
 
-    # Remove obvious junk
     if any(
         phrase in title_lower
         for phrase in BAD_TITLE_PHRASES
     ):
         return False
 
-    # Must be actuarial
     has_actuarial = (
         "actuar" in combined
     )
 
-    # Must be internship/student position
     has_internship = any(
         term in combined
         for term in (
@@ -330,20 +553,17 @@ def is_relevant(title, snippet):
         )
     )
 
-    # Must be NYC OR Remote
-    location_type = get_location_type(
-        title,
-        snippet
-    )
-
-    correct_location = (
-        location_type is not None
+    location_type = (
+        get_location_type(
+            title,
+            snippet
+        )
     )
 
     return (
         has_actuarial
         and has_internship
-        and correct_location
+        and location_type is not None
     )
 
 
@@ -354,7 +574,8 @@ def is_relevant(title, snippet):
 def priority_score(
     title,
     snippet,
-    url
+    url,
+    company
 ):
 
     combined = (
@@ -362,53 +583,45 @@ def priority_score(
         .lower()
     )
 
-    title_lower = (
-        title.lower()
-    )
+    title_lower = title.lower()
 
-    domain = (
-        domain_from_url(url)
-    )
+    domain = domain_from_url(url)
 
     score = 0
 
-    # Actuarial in title
     if "actuar" in title_lower:
         score += 5
 
-    # Intern in title
     if "intern" in title_lower:
         score += 5
 
-    # Summer 2027
     if TARGET_YEAR in combined:
         score += 7
 
     if "summer" in combined:
         score += 3
 
-    # NYC
     if any(
         term in combined
         for term in NYC_TERMS
     ):
         score += 4
 
-    # Remote
     if any(
         term in combined
         for term in REMOTE_TERMS
     ):
         score += 4
 
-    # Direct application pages get preference
+    if company:
+        score += 3
+
     if any(
         job_domain in domain
         for job_domain in DIRECT_JOB_DOMAINS
     ):
         score += 5
 
-    # Job aggregators rank slightly lower
     if any(
         job_domain in domain
         for job_domain in LOWER_PRIORITY_DOMAINS
@@ -452,25 +665,7 @@ def load_existing_jobs():
                 .strip()
             )
 
-            title = row.get(
-                "title",
-                ""
-            )
-
-            snippet = row.get(
-                "snippet",
-                ""
-            )
-
             if not url:
-                continue
-
-            # Remove old jobs that don't
-            # meet our NYC / Remote rule.
-            if not is_relevant(
-                title,
-                snippet
-            ):
                 continue
 
             existing[
@@ -478,6 +673,142 @@ def load_existing_jobs():
             ] = row
 
     return existing
+
+
+# ============================================================
+# PROCESS ONE SEARCH RESULT
+# ============================================================
+
+def process_result(
+    result,
+    query,
+    found,
+    known_company=None
+):
+
+    title = clean_text(
+        result.get("title")
+    )
+
+    url = clean_text(
+        result.get("href")
+        or result.get("url")
+    )
+
+    snippet = clean_text(
+        result.get("body")
+        or result.get("snippet")
+    )
+
+    if not title or not url:
+        return
+
+    if not is_relevant(
+        title,
+        snippet
+    ):
+        return
+
+    clean_url = (
+        canonicalize_url(url)
+    )
+
+    company = (
+        identify_company(
+            title,
+            snippet,
+            clean_url,
+            known_company
+        )
+    )
+
+    # --------------------------------------------------------
+    # IMPORTANT:
+    # NO COMPANY = NO JOB
+    # --------------------------------------------------------
+
+    if not company:
+
+        print(
+            "Skipping result because "
+            "company could not be identified:"
+        )
+
+        print(title)
+
+        return
+
+    location_type = (
+        get_location_type(
+            title,
+            snippet
+        )
+    )
+
+    score = (
+        priority_score(
+            title,
+            snippet,
+            clean_url,
+            company
+        )
+    )
+
+    candidate = {
+
+        "company":
+            company,
+
+        "title":
+            title,
+
+        "location_type":
+            location_type,
+
+        "first_seen_utc":
+            datetime.now(
+                timezone.utc
+            ).isoformat(
+                timespec="seconds"
+            ),
+
+        "priority_score":
+            str(score),
+
+        "source_domain":
+            domain_from_url(
+                clean_url
+            ),
+
+        "url":
+            clean_url,
+
+        "search_query":
+            query,
+
+        "snippet":
+            snippet[:500],
+    }
+
+    old_candidate = (
+        found.get(
+            clean_url
+        )
+    )
+
+    if (
+        old_candidate is None
+        or score >
+        int(
+            old_candidate[
+                "priority_score"
+            ]
+        )
+    ):
+
+        found[
+            clean_url
+        ] = candidate
 
 
 # ============================================================
@@ -489,6 +820,10 @@ def search_web():
     found = {}
 
     successful_queries = 0
+
+    # --------------------------------------------------------
+    # GENERAL SEARCH
+    # --------------------------------------------------------
 
     for query in SEARCH_QUERIES:
 
@@ -529,123 +864,103 @@ def search_web():
 
         for result in results or []:
 
-            title = clean_text(
-                result.get(
-                    "title"
-                )
+            process_result(
+                result,
+                query,
+                found
             )
 
-            url = clean_text(
-                result.get("href")
-                or result.get("url")
-            )
-
-            snippet = clean_text(
-                result.get("body")
-                or result.get("snippet")
-            )
-
-            if not title or not url:
-                continue
-
-            # IMPORTANT:
-            # Reject anything that is
-            # not NYC or Remote.
-            if not is_relevant(
-                title,
-                snippet
-            ):
-                continue
-
-            clean_url = (
-                canonicalize_url(
-                    url
-                )
-            )
-
-            location_type = (
-                get_location_type(
-                    title,
-                    snippet
-                )
-            )
-
-            score = (
-                priority_score(
-                    title,
-                    snippet,
-                    clean_url
-                )
-            )
-
-            candidate = {
-
-                "first_seen_utc":
-                    datetime.now(
-                        timezone.utc
-                    ).isoformat(
-                        timespec="seconds"
-                    ),
-
-                "priority_score":
-                    str(score),
-
-                "location_type":
-                    location_type,
-
-                "title":
-                    title,
-
-                "source_domain":
-                    domain_from_url(
-                        clean_url
-                    ),
-
-                "url":
-                    clean_url,
-
-                "search_query":
-                    query,
-
-                "snippet":
-                    snippet[:500],
-            }
-
-            old_candidate = (
-                found.get(
-                    clean_url
-                )
-            )
-
-            if (
-                old_candidate is None
-                or
-                score >
-                int(
-                    old_candidate[
-                        "priority_score"
-                    ]
-                )
-            ):
-
-                found[
-                    clean_url
-                ] = candidate
-
-        # Small delay so we don't
-        # hammer search engines
         time.sleep(
             random.uniform(
                 1.0,
-                2.0
+                1.7
             )
         )
+
+    # --------------------------------------------------------
+    # COMPANY-SPECIFIC SEARCH
+    #
+    # This is extremely useful because we KNOW the employer.
+    # --------------------------------------------------------
+
+    for company in TARGET_COMPANIES:
+
+        queries = [
+
+            f'"{company}" '
+            f'"actuarial intern" '
+            f'"New York"',
+
+            f'"{company}" '
+            f'"actuarial intern" '
+            f'remote',
+
+            f'"{company}" '
+            f'"actuarial internship" '
+            f'"{TARGET_YEAR}"',
+        ]
+
+        for query in queries:
+
+            print()
+            print(
+                "Searching company:",
+                company
+            )
+
+            print(
+                "Query:",
+                query
+            )
+
+            try:
+
+                results = DDGS(
+                    timeout=20
+                ).text(
+
+                    query,
+
+                    region="us-en",
+
+                    safesearch="moderate",
+
+                    max_results=10,
+
+                    backend="auto",
+                )
+
+                successful_queries += 1
+
+            except Exception as error:
+
+                print(
+                    "Search failed:",
+                    error
+                )
+
+                continue
+
+            for result in results or []:
+
+                process_result(
+                    result,
+                    query,
+                    found,
+                    known_company=company
+                )
+
+            time.sleep(
+                random.uniform(
+                    0.8,
+                    1.4
+                )
+            )
 
     if successful_queries == 0:
 
         raise RuntimeError(
-            "All searches failed. "
-            "Run the workflow again later."
+            "All searches failed."
         )
 
     return found
@@ -701,11 +1016,9 @@ def save_master_csv(
         encoding="utf-8"
     ) as file:
 
-        writer = (
-            csv.DictWriter(
-                file,
-                fieldnames=CSV_FIELDS
-            )
+        writer = csv.DictWriter(
+            file,
+            fieldnames=CSV_FIELDS
         )
 
         writer.writeheader()
@@ -727,7 +1040,7 @@ def save_master_csv(
 
 
 # ============================================================
-# CREATE NEW JOB ALERT
+# CREATE NEW-JOB REPORT
 # ============================================================
 
 def write_new_jobs_report(
@@ -779,13 +1092,11 @@ def write_new_jobs_report(
 
         "",
 
-        "Location filter: "
-        "**New York City OR Remote**",
+        "**Location:** NYC OR Remote",
 
         "",
 
-        f"Target season: "
-        f"**Summer {TARGET_YEAR}**",
+        f"**Target:** Summer {TARGET_YEAR}",
 
         "",
     ]
@@ -793,9 +1104,7 @@ def write_new_jobs_report(
     if not ordered:
 
         lines.append(
-            "No new NYC or remote "
-            "actuarial internships "
-            "were found."
+            "No new matching internships found."
         )
 
     else:
@@ -807,49 +1116,33 @@ def write_new_jobs_report(
             start=1
         ):
 
-            title = (
-                job["title"]
-                .replace(
-                    "|",
-                    "-"
-                )
-            )
-
-            snippet = (
-                job["snippet"]
-                .replace(
-                    "|",
-                    "-"
-                )
-            )
-
             lines.extend(
                 [
                     f"## {number}. "
-                    f"{title}",
+                    f"{job['company']}",
 
-                    f"- **Location type:** "
+                    f"**{job['title']}**",
+
+                    "",
+
+                    f"- **Company:** "
+                    f"{job['company']}",
+
+                    f"- **Location:** "
                     f"{job['location_type']}",
+
+                    f"- **Score:** "
+                    f"{job['priority_score']}",
 
                     f"- **Source:** "
                     f"{job['source_domain']}",
 
-                    f"- **Priority score:** "
-                    f"{job['priority_score']}",
-
                     f"- **Apply:** "
                     f"{job['url']}",
+
+                    "",
                 ]
             )
-
-            if snippet:
-
-                lines.append(
-                    f"- **Preview:** "
-                    f"{snippet}"
-                )
-
-            lines.append("")
 
     report = "\n".join(
         lines
@@ -897,19 +1190,23 @@ def main():
     )
 
     print(
-        "ONLY searching for:"
+        "Requirements:"
     )
 
     print(
-        "- New York City internships"
+        "- Actuarial internship"
     )
 
     print(
-        "- Remote internships"
+        "- NYC OR Remote"
     )
 
     print(
-        f"- Preferably Summer {TARGET_YEAR}"
+        "- Must have identifiable company"
+    )
+
+    print(
+        f"- Prefer Summer {TARGET_YEAR}"
     )
 
     existing = (
@@ -936,8 +1233,9 @@ def main():
     ]
 
     print()
+
     print(
-        "NYC / Remote jobs found:",
+        "Valid jobs found:",
         len(found)
     )
 
@@ -956,6 +1254,7 @@ def main():
     )
 
     print()
+
     print(
         "Search finished."
     )
