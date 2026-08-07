@@ -14,23 +14,17 @@ from ddgs import DDGS
 
 TARGET_YEAR = "2027"
 
-# Much faster than our old version
 MAX_RESULTS_PER_QUERY = 15
-
-# Individual DDGS request timeout
 SEARCH_TIMEOUT_SECONDS = 6
 
-# HARD LIMIT for the entire searching portion
+# Stop searching after 2.5 minutes even if a search provider is slow
 MAX_TOTAL_SEARCH_SECONDS = 150
 
 MAX_JOBS_IN_ISSUE = 30
 
 
 # ============================================================
-# ACTUARIAL EMPLOYERS
-#
-# We do NOT run 3 searches for every company anymore.
-# Instead, companies are grouped together into a few searches.
+# ACTUARIAL EMPLOYERS WE RECOGNIZE
 # ============================================================
 
 TARGET_COMPANIES = [
@@ -69,8 +63,16 @@ TARGET_COMPANIES = [
 ]
 
 
-# Different names that may appear in search results
+# ============================================================
+# COMPANY ALIASES
+# ============================================================
+
 COMPANY_ALIASES = {
+
+    "Aon": [
+        "Aon",
+    ],
+
     "WTW": [
         "WTW",
         "Willis Towers Watson",
@@ -78,10 +80,6 @@ COMPANY_ALIASES = {
 
     "Mercer": [
         "Mercer",
-    ],
-
-    "Aon": [
-        "Aon",
     ],
 
     "Milliman": [
@@ -104,7 +102,7 @@ COMPANY_ALIASES = {
 
     "Guardian Life": [
         "Guardian Life",
-        "Guardian",
+        "The Guardian Life Insurance Company",
     ],
 
     "Travelers": [
@@ -134,13 +132,11 @@ COMPANY_ALIASES = {
     "Marsh McLennan": [
         "Marsh McLennan",
         "Marsh & McLennan",
-        "Marsh",
     ],
 
     "Gallagher": [
         "Gallagher",
         "Arthur J. Gallagher",
-        "AJG",
     ],
 
     "Lockton": [
@@ -180,8 +176,8 @@ COMPANY_ALIASES = {
 
     "UnitedHealth Group": [
         "UnitedHealth Group",
-        "United Healthcare",
         "UnitedHealthcare",
+        "United Healthcare",
     ],
 
     "Optum": [
@@ -225,7 +221,9 @@ COMPANY_ALIASES = {
 # ============================================================
 # LOCATION FILTER
 #
-# ONLY NYC OR REMOTE
+# ONLY:
+# - NEW YORK CITY
+# - REMOTE
 # ============================================================
 
 NYC_TERMS = (
@@ -247,7 +245,6 @@ REMOTE_TERMS = (
     "fully remote",
     "work from home",
     "work-from-home",
-    "virtual position",
     "remote - us",
     "remote us",
     "remote, us",
@@ -266,7 +263,7 @@ NOT_REMOTE_TERMS = (
 
 
 # ============================================================
-# ATS / JOB SYSTEMS
+# JOB SITES
 # ============================================================
 
 DIRECT_JOB_DOMAINS = (
@@ -281,28 +278,58 @@ DIRECT_JOB_DOMAINS = (
 
 
 AGGREGATOR_DOMAINS = (
-    "linkedin.com",
     "indeed.com",
+    "linkedin.com",
     "glassdoor.com",
     "ziprecruiter.com",
     "simplyhired.com",
+    "monster.com",
+    "careerbuilder.com",
 )
 
 
-GENERIC_COMPANY_WORDS = (
+# ============================================================
+# THESE CAN NEVER BE THE COMPANY
+# ============================================================
+
+INVALID_COMPANY_NAMES = (
+    "indeed",
+    "indeed.com",
+    "linkedin",
+    "linkedin.com",
+    "glassdoor",
+    "glassdoor.com",
+    "ziprecruiter",
+    "zip recruiter",
+    "ziprecruiter.com",
+    "simplyhired",
+    "simply hired",
+    "monster",
+    "monster.com",
+    "careerbuilder",
+    "career builder",
+    "google",
+    "google jobs",
+    "bing",
     "jobs",
     "job",
     "careers",
     "career",
-    "apply",
     "employment",
+    "apply",
     "workday",
+    "myworkdayjobs",
+    "myworkdayjobs.com",
     "greenhouse",
+    "greenhouse.io",
     "lever",
+    "lever.co",
     "smartrecruiters",
-    "linkedin",
-    "indeed",
-    "glassdoor",
+    "smartrecruiters.com",
+    "icims",
+    "icims.com",
+    "taleo",
+    "successfactors",
 )
 
 
@@ -344,61 +371,33 @@ TRACKING_KEYS = {
 
 
 # ============================================================
-# BUILD OUR SEARCHES
-#
-# Total = 14 searches
+# SEARCH QUERIES
 # ============================================================
 
 def build_search_queries():
 
     queries = [
 
-        # ----------------------------------------------------
         # NYC
-        # ----------------------------------------------------
-
         '"actuarial intern" "New York, NY" 2027',
-
         '"actuarial internship" "New York City" 2027',
-
         '"summer 2027" "actuarial intern" NYC',
 
-
-        # ----------------------------------------------------
-        # REMOTE
-        # ----------------------------------------------------
-
+        # Remote
         '"actuarial intern" remote 2027',
-
         '"actuarial internship" remote 2027',
-
         '"summer 2027" "actuarial internship" remote',
 
-
-        # ----------------------------------------------------
-        # MAJOR RECRUITING SYSTEMS
-        # ----------------------------------------------------
-
-        'site:myworkdayjobs.com "actuarial intern" '
-        '("New York" OR remote)',
-
-        'site:greenhouse.io "actuarial intern" '
-        '("New York" OR remote)',
-
-        'site:lever.co "actuarial intern" '
-        '("New York" OR remote)',
-
-        'site:smartrecruiters.com "actuarial intern" '
-        '("New York" OR remote)',
+        # Career systems
+        'site:myworkdayjobs.com "actuarial intern" ("New York" OR remote)',
+        'site:greenhouse.io "actuarial intern" ("New York" OR remote)',
+        'site:lever.co "actuarial intern" ("New York" OR remote)',
+        'site:smartrecruiters.com "actuarial intern" ("New York" OR remote)',
     ]
 
-    # --------------------------------------------------------
-    # GROUP COMPANIES 8 AT A TIME
-    #
-    # 32 companies / 8 = only 4 additional searches
-    # --------------------------------------------------------
-
-    group_size = 8
+    # Search several companies at once instead of
+    # making 3 separate searches for every employer.
+    group_size = 9
 
     for index in range(
         0,
@@ -415,20 +414,18 @@ def build_search_queries():
             for company in group
         )
 
-        query = (
+        queries.append(
             f"({company_part}) "
             f'"actuarial intern" '
             f'("New York" OR remote) '
             f'{TARGET_YEAR}'
         )
 
-        queries.append(query)
-
     return queries
 
 
 # ============================================================
-# TEXT CLEANING
+# CLEAN TEXT
 # ============================================================
 
 def clean_text(text):
@@ -449,7 +446,7 @@ def clean_text(text):
 
 
 # ============================================================
-# URL CLEANING
+# CLEAN URL
 # ============================================================
 
 def canonicalize_url(url):
@@ -469,9 +466,7 @@ def canonicalize_url(url):
 
             lower_key = key.lower()
 
-            if lower_key.startswith(
-                "utm_"
-            ):
+            if lower_key.startswith("utm_"):
                 continue
 
             if lower_key in TRACKING_KEYS:
@@ -504,6 +499,10 @@ def canonicalize_url(url):
         return url.strip()
 
 
+# ============================================================
+# GET DOMAIN
+# ============================================================
+
 def domain_from_url(url):
 
     try:
@@ -521,6 +520,71 @@ def domain_from_url(url):
 
 
 # ============================================================
+# VALIDATE COMPANY
+#
+# THIS IS THE IMPORTANT FIX
+# ============================================================
+
+def validate_company(company):
+
+    if not company:
+        return None
+
+    company = clean_text(company)
+
+    company = (
+        company
+        .replace("®", "")
+        .replace("™", "")
+        .strip(" -|:")
+    )
+
+    normalized = (
+        company
+        .lower()
+        .replace("www.", "")
+        .strip()
+    )
+
+    normalized_without_domain = re.sub(
+        r"\.(com|org|net|co)$",
+        "",
+        normalized
+    )
+
+    for invalid in INVALID_COMPANY_NAMES:
+
+        invalid_normalized = (
+            invalid
+            .lower()
+            .replace("www.", "")
+        )
+
+        invalid_without_domain = re.sub(
+            r"\.(com|org|net|co)$",
+            "",
+            invalid_normalized
+        )
+
+        if (
+            normalized == invalid_normalized
+            or
+            normalized_without_domain
+            == invalid_without_domain
+        ):
+
+            return None
+
+    if len(company) < 2:
+        return None
+
+    if len(company) > 80:
+        return None
+
+    return company
+
+
+# ============================================================
 # LOCATION DETECTION
 # ============================================================
 
@@ -534,7 +598,7 @@ def get_location_type(
         .lower()
     )
 
-    nyc = any(
+    is_nyc = any(
         term in combined
         for term in NYC_TERMS
     )
@@ -544,7 +608,7 @@ def get_location_type(
         for term in NOT_REMOTE_TERMS
     )
 
-    remote = (
+    is_remote = (
         any(
             term in combined
             for term in REMOTE_TERMS
@@ -552,20 +616,20 @@ def get_location_type(
         and not explicitly_not_remote
     )
 
-    if nyc and remote:
+    if is_nyc and is_remote:
         return "NYC / Remote"
 
-    if nyc:
+    if is_nyc:
         return "NYC"
 
-    if remote:
+    if is_remote:
         return "Remote"
 
     return None
 
 
 # ============================================================
-# COMPANY DETECTION
+# COMPANY FROM RECOGNIZED COMPANY LIST
 # ============================================================
 
 def company_from_known_list(
@@ -577,28 +641,27 @@ def company_from_known_list(
         f"{title} {snippet}"
     )
 
-    # Longer aliases first so
-    # "New York Life" wins over smaller matches
-    all_aliases = []
+    aliases = []
 
-    for company, aliases in COMPANY_ALIASES.items():
+    for company, names in COMPANY_ALIASES.items():
 
-        for alias in aliases:
+        for alias in names:
 
-            all_aliases.append(
+            aliases.append(
                 (
                     company,
                     alias
                 )
             )
 
-    all_aliases.sort(
+    # Longest company names first
+    aliases.sort(
         key=lambda item:
         len(item[1]),
         reverse=True
     )
 
-    for company, alias in all_aliases:
+    for company, alias in aliases:
 
         pattern = (
             r"(?<![A-Za-z0-9])"
@@ -612,15 +675,21 @@ def company_from_known_list(
             flags=re.IGNORECASE
         ):
 
-            return company
+            return validate_company(
+                company
+            )
 
     return None
 
 
+# ============================================================
+# CLEAN COMPANY SLUG
+# ============================================================
+
 def humanize_slug(text):
 
     text = (
-        text
+        str(text)
         .replace("-", " ")
         .replace("_", " ")
     )
@@ -634,14 +703,16 @@ def humanize_slug(text):
     if not text:
         return None
 
-    if text.lower() in GENERIC_COMPANY_WORDS:
-        return None
+    candidate = text.title()
 
-    if len(text) < 2:
-        return None
+    return validate_company(
+        candidate
+    )
 
-    return text.title()
 
+# ============================================================
+# COMPANY FROM ATS URL
+# ============================================================
 
 def company_from_ats_url(url):
 
@@ -661,7 +732,6 @@ def company_from_ats_url(url):
             if part
         ]
 
-
         # ----------------------------------------------------
         # WORKDAY
         #
@@ -673,22 +743,21 @@ def company_from_ats_url(url):
             "myworkdayjobs.com"
         ):
 
-            first_part = host.split(".")[0]
+            first = host.split(".")[0]
 
             if not re.fullmatch(
                 r"wd\d+",
-                first_part
+                first
             ):
 
                 return humanize_slug(
-                    first_part
+                    first
                 )
-
 
         # ----------------------------------------------------
         # LEVER
         #
-        # jobs.lever.co/company-name/job-id
+        # jobs.lever.co/company/job
         # ----------------------------------------------------
 
         if host.endswith(
@@ -701,7 +770,6 @@ def company_from_ats_url(url):
                     path_parts[0]
                 )
 
-
         # ----------------------------------------------------
         # GREENHOUSE
         # ----------------------------------------------------
@@ -710,24 +778,25 @@ def company_from_ats_url(url):
             "greenhouse.io"
         ):
 
-            if path_parts:
+            ignored = {
+                "jobs",
+                "job",
+                "embed",
+            }
 
-                ignored = {
-                    "jobs",
-                    "job",
-                }
+            for part in path_parts:
 
-                for part in path_parts:
+                if (
+                    part.lower()
+                    not in ignored
+                ):
 
-                    if (
-                        part.lower()
-                        not in ignored
-                    ):
+                    company = humanize_slug(
+                        part
+                    )
 
-                        return humanize_slug(
-                            part
-                        )
-
+                    if company:
+                        return company
 
         # ----------------------------------------------------
         # SMARTRECRUITERS
@@ -750,13 +819,11 @@ def company_from_ats_url(url):
     return None
 
 
-def company_from_title(title):
+# ============================================================
+# COMPANY FROM TITLE
+# ============================================================
 
-    # Common formats:
-    #
-    # Actuarial Intern - Chubb
-    # Actuarial Intern | Chubb
-    # Actuarial Intern at MetLife
+def company_from_title(title):
 
     separators = [
         " at ",
@@ -789,7 +856,8 @@ def company_from_title(title):
             candidate.lower()
         )
 
-        bad_candidate_terms = (
+        # Don't mistake locations/job terms for company names
+        bad_terms = (
             "new york",
             "remote",
             "nyc",
@@ -800,21 +868,32 @@ def company_from_title(title):
             "intern",
             "internship",
             "2027",
+            "summer",
         )
 
         if any(
             term in candidate_lower
-            for term in bad_candidate_terms
+            for term in bad_terms
         ):
+
             continue
 
-        if (
-            2 <= len(candidate) <= 60
-        ):
-            return candidate
+        company = validate_company(
+            candidate
+        )
+
+        if company:
+            return company
 
     return None
 
+
+# ============================================================
+# COMPANY FROM DIRECT EMPLOYER DOMAIN
+#
+# careers.metlife.com -> Metlife
+# jobs.chubb.com -> Chubb
+# ============================================================
 
 def company_from_regular_domain(url):
 
@@ -823,13 +902,17 @@ def company_from_regular_domain(url):
     if not domain:
         return None
 
-    # Do not guess company name from
-    # aggregators or generic ATS domains
+    # NEVER derive employer from Indeed/LinkedIn/etc.
     if any(
-        generic in domain
-        for generic in
-        DIRECT_JOB_DOMAINS
-        + AGGREGATOR_DOMAINS
+        aggregator in domain
+        for aggregator in AGGREGATOR_DOMAINS
+    ):
+        return None
+
+    # ATS domains have their own extraction logic
+    if any(
+        ats in domain
+        for ats in DIRECT_JOB_DOMAINS
     ):
         return None
 
@@ -838,11 +921,6 @@ def company_from_regular_domain(url):
     if len(pieces) < 2:
         return None
 
-    # Usually:
-    # careers.metlife.com
-    # jobs.chubb.com
-    #
-    # second-to-last component = employer
     candidate = pieces[-2]
 
     return humanize_slug(
@@ -850,60 +928,105 @@ def company_from_regular_domain(url):
     )
 
 
+# ============================================================
+# IDENTIFY THE ACTUAL EMPLOYER
+# ============================================================
+
 def identify_company(
     title,
     snippet,
     url
 ):
 
-    # Best:
-    # company name actually appears
+    domain = domain_from_url(url)
+
+    # --------------------------------------------------------
+    # 1. BEST METHOD
+    #
+    # Recognized company appears in title/description
+    # --------------------------------------------------------
+
     company = company_from_known_list(
         title,
         snippet
     )
 
+    company = validate_company(
+        company
+    )
+
     if company:
         return company
 
+    # --------------------------------------------------------
+    # 2. ATS URL
+    #
+    # Workday / Greenhouse / Lever may reveal employer
+    # --------------------------------------------------------
 
-    # Next:
-    # ATS URL tells us employer
     company = company_from_ats_url(
         url
     )
 
+    company = validate_company(
+        company
+    )
+
     if company:
         return company
 
+    # --------------------------------------------------------
+    # 3. JOB TITLE
+    #
+    # Actuarial Intern - Chubb
+    # --------------------------------------------------------
 
-    # Next:
-    # title contains employer
     company = company_from_title(
         title
     )
 
-    if company:
-        return company
-
-
-    # Finally:
-    # actual employer domain
-    company = company_from_regular_domain(
-        url
+    company = validate_company(
+        company
     )
 
     if company:
         return company
 
+    # --------------------------------------------------------
+    # 4. DIRECT EMPLOYER DOMAIN
+    #
+    # Only if source is NOT Indeed, LinkedIn, etc.
+    # --------------------------------------------------------
 
-    # No reliable company:
-    # THROW IT AWAY
+    is_aggregator = any(
+        aggregator in domain
+        for aggregator in AGGREGATOR_DOMAINS
+    )
+
+    if not is_aggregator:
+
+        company = company_from_regular_domain(
+            url
+        )
+
+        company = validate_company(
+            company
+        )
+
+        if company:
+            return company
+
+    # --------------------------------------------------------
+    # WE CANNOT CONFIDENTLY IDENTIFY EMPLOYER
+    #
+    # Throw result away.
+    # --------------------------------------------------------
+
     return None
 
 
 # ============================================================
-# INTERNSHIP FILTER
+# ACTUARIAL INTERNSHIP FILTER
 # ============================================================
 
 def is_actuarial_internship(
@@ -911,7 +1034,9 @@ def is_actuarial_internship(
     snippet
 ):
 
-    title_lower = title.lower()
+    title_lower = (
+        title.lower()
+    )
 
     combined = (
         f"{title} {snippet}"
@@ -919,44 +1044,39 @@ def is_actuarial_internship(
     )
 
     if any(
-        bad in title_lower
-        for bad in BAD_TITLE_PHRASES
+        phrase in title_lower
+        for phrase in BAD_TITLE_PHRASES
     ):
-        return False
 
+        return False
 
     # Must actually be actuarial
     if "actuar" not in combined:
         return False
 
-
-    # Strong internship signal.
-    internship_in_title = any(
-        term in title_lower
-        for term in (
-            "intern",
-            "internship",
-            "summer analyst",
-        )
-    )
-
-    internship_in_text = any(
+    # Must actually be internship-related
+    internship_signal = any(
         term in combined
         for term in (
             "actuarial intern",
             "actuarial internship",
             "summer actuarial",
+            "actuary intern",
         )
     )
 
+    title_intern_signal = (
+        "intern" in title_lower
+    )
+
     if not (
-        internship_in_title
-        or internship_in_text
+        internship_signal
+        or title_intern_signal
     ):
+
         return False
 
-
-    # MUST BE NYC OR REMOTE
+    # Must be NYC or remote
     if get_location_type(
         title,
         snippet
@@ -968,7 +1088,7 @@ def is_actuarial_internship(
 
 
 # ============================================================
-# SCORING
+# SCORE RESULT
 # ============================================================
 
 def priority_score(
@@ -993,22 +1113,17 @@ def priority_score(
 
     score = 0
 
-
     if "actuar" in title_lower:
         score += 5
-
 
     if "intern" in title_lower:
         score += 5
 
-
     if TARGET_YEAR in combined:
         score += 8
 
-
     if "summer" in combined:
         score += 3
-
 
     location = get_location_type(
         title,
@@ -1024,43 +1139,39 @@ def priority_score(
     elif location == "NYC / Remote":
         score += 6
 
-
-    # We successfully know the company
     if company:
         score += 3
 
-
-    # Direct career pages are better
+    # Direct career systems get preference
     if any(
         job_domain in domain
-        for job_domain
-        in DIRECT_JOB_DOMAINS
+        for job_domain in DIRECT_JOB_DOMAINS
     ):
+
         score += 5
 
-
-    # Aggregators are usable,
-    # but direct employer pages rank higher
+    # Aggregators still allowed,
+    # but rank below direct company pages
     if any(
         aggregator in domain
-        for aggregator
-        in AGGREGATOR_DOMAINS
+        for aggregator in AGGREGATOR_DOMAINS
     ):
+
         score -= 2
 
     return score
 
 
 # ============================================================
-# DUPLICATE IDENTIFIER
-#
-# This prevents the same job appearing
-# through LinkedIn + Workday + Google, etc.
+# NORMALIZE FOR DUPLICATES
 # ============================================================
 
 def normalize_for_key(text):
 
-    text = text.lower()
+    text = (
+        str(text or "")
+        .lower()
+    )
 
     text = re.sub(
         r"[^a-z0-9]+",
@@ -1100,7 +1211,10 @@ def job_key(job):
 
 
 # ============================================================
-# LOAD OLD JOBS
+# LOAD EXISTING JOBS
+#
+# ALSO CLEANS OLD BAD ROWS LIKE:
+# Company = Indeed
 # ============================================================
 
 def load_existing_jobs():
@@ -1110,6 +1224,7 @@ def load_existing_jobs():
     if not os.path.exists(
         "jobs.csv"
     ):
+
         return existing
 
     with open(
@@ -1149,7 +1264,7 @@ def load_existing_jobs():
             if not title or not url:
                 continue
 
-
+            # Must still satisfy NYC / Remote
             location = get_location_type(
                 title,
                 snippet
@@ -1158,49 +1273,62 @@ def load_existing_jobs():
             if not location:
                 continue
 
-
-            company = clean_text(
+            old_company = validate_company(
                 row.get(
                     "company",
                     ""
                 )
             )
 
-            # Upgrade older CSV rows
-            # that didn't yet have Company
-            if not company:
+            # If old CSV says Indeed/LinkedIn/etc,
+            # attempt to find the REAL employer.
+            if not old_company:
 
-                company = identify_company(
+                old_company = identify_company(
                     title,
                     snippet,
                     url
                 )
 
-            if not company:
+            # Still can't identify employer?
+            # Remove this old row entirely.
+            if not old_company:
+
+                print(
+                    "Removing old row with "
+                    "unidentified employer:",
+                    title
+                )
+
                 continue
 
+            row[
+                "company"
+            ] = old_company
 
-            row["company"] = company
+            row[
+                "location_type"
+            ] = location
 
-            row["location_type"] = (
-                location
+            row[
+                "url"
+            ] = canonicalize_url(
+                url
             )
 
-            row["url"] = (
-                canonicalize_url(
-                    url
-                )
+            key = job_key(
+                row
             )
 
-            key = job_key(row)
-
-            existing[key] = row
+            existing[
+                key
+            ] = row
 
     return existing
 
 
 # ============================================================
-# PROCESS A SEARCH RESULT
+# PROCESS ONE SEARCH RESULT
 # ============================================================
 
 def process_result(
@@ -1232,22 +1360,19 @@ def process_result(
         )
     )
 
-
     if not title or not url:
         return None
-
 
     if not is_actuarial_internship(
         title,
         snippet
     ):
-        return None
 
+        return None
 
     url = canonicalize_url(
         url
     )
-
 
     company = identify_company(
         title,
@@ -1255,29 +1380,39 @@ def process_result(
         url
     )
 
-
     # ========================================================
-    # YOUR COMPANY REQUIREMENT:
+    # HARD REQUIREMENT
     #
-    # If we don't know who the employer is,
-    # DO NOT SAVE IT.
+    # NO REAL COMPANY = DO NOT SAVE JOB
     # ========================================================
 
     if not company:
 
         print(
-            "  Skipped - no identifiable company:",
+            "  SKIPPED - could not identify real employer:",
             title
         )
 
         return None
 
+    # Extra final validation
+    company = validate_company(
+        company
+    )
+
+    if not company:
+
+        print(
+            "  SKIPPED - invalid employer:",
+            title
+        )
+
+        return None
 
     location_type = get_location_type(
         title,
         snippet
     )
-
 
     score = priority_score(
         title,
@@ -1285,7 +1420,6 @@ def process_result(
         url,
         company
     )
-
 
     return {
 
@@ -1330,9 +1464,7 @@ def process_result(
 
 def search_web():
 
-    queries = (
-        build_search_queries()
-    )
+    queries = build_search_queries()
 
     print(
         f"Running {len(queries)} "
@@ -1346,7 +1478,6 @@ def search_web():
 
     print()
 
-
     found = {}
 
     successful_queries = 0
@@ -1355,13 +1486,10 @@ def search_web():
         time.monotonic()
     )
 
-
-    # One DDGS object for the entire run
     search_engine = DDGS(
         timeout=
         SEARCH_TIMEOUT_SECONDS
     )
-
 
     for number, query in enumerate(
         queries,
@@ -1373,18 +1501,8 @@ def search_web():
             - start_time
         )
 
-
-        # ====================================================
-        # HARD STOP
-        #
-        # Even if search engines are being slow,
-        # stop after 150 seconds and save whatever we found.
-        # ====================================================
-
-        if (
-            elapsed
-            >= MAX_TOTAL_SEARCH_SECONDS
-        ):
+        # Hard stop
+        if elapsed >= MAX_TOTAL_SEARCH_SECONDS:
 
             print()
             print(
@@ -1392,39 +1510,32 @@ def search_web():
             )
 
             print(
-                "Saving results found so far."
+                "Saving jobs found so far."
             )
 
             break
-
 
         print(
             f"[{number}/{len(queries)}] "
             f"{query}"
         )
 
-
         try:
 
-            results = (
+            results = list(
                 search_engine.text(
                     query,
                     region="us-en",
                     safesearch="moderate",
-
-                    # Search postings from
-                    # approximately the last year
                     timelimit="y",
-
                     max_results=
                     MAX_RESULTS_PER_QUERY,
-
                     backend="auto",
                 )
+                or []
             )
 
             successful_queries += 1
-
 
         except Exception as error:
 
@@ -1436,43 +1547,33 @@ def search_web():
 
             continue
 
-
         print(
             "  Raw results:",
-            len(results or [])
+            len(results)
         )
 
-
-        for result in results or []:
+        for result in results:
 
             job = process_result(
                 result,
                 query
             )
 
-
             if not job:
                 continue
-
 
             key = job_key(
                 job
             )
 
-
-            existing_match = (
-                found.get(
-                    key
-                )
+            previous = found.get(
+                key
             )
 
-
-            # If same internship appears twice,
-            # keep the higher-quality version.
-            if existing_match:
+            if previous:
 
                 old_score = int(
-                    existing_match.get(
+                    previous.get(
                         "priority_score",
                         0
                     )
@@ -1487,20 +1588,18 @@ def search_web():
                     or 0
                 )
 
+                # Keep better version of duplicate listing
                 if new_score <= old_score:
                     continue
 
+            found[
+                key
+            ] = job
 
-            found[key] = job
-
-
-        # Very small pause.
-        # Old version had far more pauses
-        # across 100+ queries.
+        # Tiny pause between searches
         time.sleep(
             0.25
         )
-
 
     if successful_queries == 0:
 
@@ -1509,17 +1608,15 @@ def search_web():
             "Try again later."
         )
 
-
     elapsed = (
         time.monotonic()
         - start_time
     )
 
-
     print()
     print(
-        f"Search portion finished "
-        f"in {elapsed:.1f} seconds."
+        f"Search finished in "
+        f"{elapsed:.1f} seconds."
     )
 
     print(
@@ -1527,12 +1624,11 @@ def search_web():
         f"{len(found)}"
     )
 
-
     return found
 
 
 # ============================================================
-# SAVE MASTER CSV
+# SAVE MASTER JOB DATABASE
 # ============================================================
 
 def save_master_csv(
@@ -1544,13 +1640,10 @@ def save_master_csv(
         existing
     )
 
-
     for key, job in found.items():
 
         if key in combined:
 
-            # Preserve the original
-            # date we first discovered it
             old_first_seen = (
                 combined[key]
                 .get(
@@ -1559,7 +1652,8 @@ def save_master_csv(
             )
 
             old_score = int(
-                combined[key].get(
+                combined[key]
+                .get(
                     "priority_score",
                     0
                 )
@@ -1574,30 +1668,27 @@ def save_master_csv(
                 or 0
             )
 
-
-            # Update to a better version
-            # of the same listing if found
             if new_score > old_score:
 
                 if old_first_seen:
 
                     job[
                         "first_seen_utc"
-                    ] = (
-                        old_first_seen
-                    )
+                    ] = old_first_seen
 
-                combined[key] = job
+                combined[
+                    key
+                ] = job
 
         else:
 
-            combined[key] = job
-
+            combined[
+                key
+            ] = job
 
     rows = list(
         combined.values()
     )
-
 
     rows.sort(
 
@@ -1620,7 +1711,6 @@ def save_master_csv(
         reverse=True,
     )
 
-
     with open(
         "jobs.csv",
         "w",
@@ -1634,7 +1724,6 @@ def save_master_csv(
         )
 
         writer.writeheader()
-
 
         for row in rows:
 
@@ -1653,7 +1742,7 @@ def save_master_csv(
 
 
 # ============================================================
-# CREATE GITHUB ALERT
+# WRITE NEW JOB ALERT
 # ============================================================
 
 def write_new_jobs_report(
@@ -1676,7 +1765,6 @@ def write_new_jobs_report(
         reverse=True,
     )
 
-
     with open(
         "new_jobs_count.txt",
         "w",
@@ -1689,7 +1777,6 @@ def write_new_jobs_report(
             )
         )
 
-
     now = (
         datetime.now(
             timezone.utc
@@ -1699,10 +1786,9 @@ def write_new_jobs_report(
         )
     )
 
-
     lines = [
 
-        f"# 🚨 {len(ordered)} new actuarial internship(s)",
+        f"# {len(ordered)} new actuarial internship(s)",
 
         "",
 
@@ -1716,13 +1802,14 @@ def write_new_jobs_report(
 
         "- New York City OR Remote",
 
-        "- Must have identifiable company",
+        "- Must have identifiable real employer",
+
+        "- Job boards are NOT treated as employers",
 
         f"- Summer {TARGET_YEAR} prioritized",
 
         "",
     ]
-
 
     if not ordered:
 
@@ -1730,7 +1817,6 @@ def write_new_jobs_report(
             "No new matching internships "
             "were discovered this run."
         )
-
 
     else:
 
@@ -1759,33 +1845,29 @@ def write_new_jobs_report(
                     f"- **Priority Score:** "
                     f"{job['priority_score']}",
 
-                    f"- **Source:** "
+                    f"- **Found on:** "
                     f"{job['source_domain']}",
 
-                    f"- **Apply / View Job:** "
+                    f"- **Apply / View:** "
                     f"{job['url']}",
 
                     "",
                 ]
             )
 
-
             if job.get(
                 "snippet"
             ):
 
                 lines.append(
-                    f"> "
-                    f"{job['snippet']}"
+                    f"> {job['snippet']}"
                 )
 
                 lines.append("")
 
-
     report = "\n".join(
         lines
     )
-
 
     with open(
         "new_jobs.md",
@@ -1797,13 +1879,9 @@ def write_new_jobs_report(
             report
         )
 
-
-    # Also display results right
-    # on the GitHub Action summary
     summary_path = os.getenv(
         "GITHUB_STEP_SUMMARY"
     )
-
 
     if summary_path:
 
@@ -1819,7 +1897,7 @@ def write_new_jobs_report(
 
 
 # ============================================================
-# MAIN
+# MAIN PROGRAM
 # ============================================================
 
 def main():
@@ -1839,61 +1917,56 @@ def main():
     print()
 
     print(
-        "Searching for:"
+        "Requirements:"
     )
 
     print(
-        "• Actuarial internships"
+        "- Actuarial internship"
     )
 
     print(
-        "• New York City OR Remote"
+        "- New York City OR Remote"
     )
 
     print(
-        "• Specific identifiable employer"
+        "- Must identify REAL employer"
     )
 
     print(
-        f"• Summer {TARGET_YEAR} prioritized"
+        "- Indeed/LinkedIn/etc. are sources only"
+    )
+
+    print(
+        f"- Summer {TARGET_YEAR} prioritized"
     )
 
     print()
 
-
     # --------------------------------------------------------
-    # OLD DATABASE
+    # LOAD PREVIOUS DATABASE
     # --------------------------------------------------------
 
-    existing = (
-        load_existing_jobs()
-    )
-
+    existing = load_existing_jobs()
 
     existing_keys = set(
         existing.keys()
     )
 
-
     print(
-        "Previously saved jobs:",
+        "Previously saved valid jobs:",
         len(existing)
     )
 
     print()
 
-
     # --------------------------------------------------------
     # SEARCH
     # --------------------------------------------------------
 
-    found = (
-        search_web()
-    )
-
+    found = search_web()
 
     # --------------------------------------------------------
-    # DETERMINE WHAT IS NEW
+    # FIND BRAND-NEW JOBS
     # --------------------------------------------------------
 
     new_jobs = [
@@ -1903,15 +1976,13 @@ def main():
         for key, job
         in found.items()
 
-        if key
-        not in existing_keys
+        if key not in existing_keys
     ]
-
 
     print()
 
     print(
-        "Unique valid jobs this search:",
+        "Valid jobs found this search:",
         len(found)
     )
 
@@ -1920,9 +1991,8 @@ def main():
         len(new_jobs)
     )
 
-
     # --------------------------------------------------------
-    # SAVE
+    # SAVE DATABASE
     # --------------------------------------------------------
 
     save_master_csv(
@@ -1930,11 +2000,13 @@ def main():
         found
     )
 
+    # --------------------------------------------------------
+    # CREATE ALERT
+    # --------------------------------------------------------
 
     write_new_jobs_report(
         new_jobs
     )
-
 
     print()
 
