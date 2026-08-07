@@ -2,8 +2,12 @@ name: Actuarial Internship Finder
 
 on:
   workflow_dispatch:
+
   schedule:
     - cron: "0 */6 * * *"
+
+permissions:
+  contents: read
 
 jobs:
   search:
@@ -11,10 +15,10 @@ jobs:
 
     steps:
       - name: Get repository files
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
